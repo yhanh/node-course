@@ -6,6 +6,22 @@ const app = express();
 
 const path = require('path');
 
+const mysql = require('mysql2');
+require('dotenv').config();
+
+// 這裡不會像爬蟲那樣，只建立一個連線
+// 但是也不會幫每一個 request 都分別建立連線(資料庫承受不住)
+// ----> connection pool(先請一些人)
+let pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  // 為了 pool 新增的參數
+  connectionLimit: 10,
+}).promise();
+
 // express 處理靜態資料
 // 靜態資料：html, css 檔案, JavaScript 檔案, 圖片, 影音檔,...
 // static 是少數 express 內建的中間件
@@ -61,6 +77,31 @@ app.get("/error", (req, res, next) => {
   // next('X');
   // 都會跳到錯誤處理中間件
 });
+
+
+// stocks
+app.get('/stocks',async (req, res, next) => {
+  let [data, fields] = await pool.execute("SELECT * FROM stocks");
+  res.json(data);
+});
+
+// 取得某個股票 id 的資料
+app.get('/stocks/:stockId', async(req, res, next) => {
+  // 取得網址上的參數 req.params
+  // req.params.stockId
+  let [data, fields] = await pool.execute("SELECT * FROM stocks WHERE id = " + req.params.stockId);
+
+  // 空資料(查無資料)有兩種處理方式:
+  // 1. 200 OK 就回 []
+  // 2. 回覆 404
+  if(data.length === 0){
+    // 404 範例
+    res.status(404).json(data);
+  } else {
+    res.json(data);
+  }
+});
+
 
 // 這個中間件在所有路由的後面
 // 會到這裡，表示前面所有的路由中間件都沒有比到符合的網址
